@@ -1,19 +1,44 @@
 import { askOllama } from "./ollama.js";
 
-export async function reviewCode(diff) {
+export async function reviewCode(changedLines) {
   const prompt = `
-You are a senior software engineer reviewing a pull request.
+You are an AI code reviewer.
 
-Focus on:
-- bugs
-- security
-- readability
-- performance
-- bad practices
+Review ONLY the provided changed lines.
 
-Code diff:
-${diff}
+Return ONLY valid JSON array.
+
+IMPORTANT:
+- Use ONLY exact line numbers provided
+- Use ONLY exact file paths provided
+- Focus on bugs and logical issues
+- Ignore formatting issues
+
+Format:
+[
+  {
+    "path": "file path",
+    "line": 12,
+    "comment": "Issue explanation"
+  }
+]
+
+Changed Lines:
+${JSON.stringify(changedLines, null, 2)}
 `;
 
-  return await askOllama(prompt);
+  const response = await askOllama(prompt);
+
+  try {
+    const cleaned = response
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.error("Failed to parse AI response");
+    console.log(response);
+    return [];
+  }
 }
