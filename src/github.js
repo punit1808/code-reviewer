@@ -2,15 +2,12 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import { Octokit } from "@octokit/rest";
+import parseDiff from "parse-diff";
+
 import { reviewCode } from "./reviewer.js";
 
 export async function handlePullRequest(payload) {
   try {
-    console.log(
-      "TOKEN PREVIEW:",
-      process.env.GITHUB_TOKEN?.slice(0, 10)
-    );
-
     const octokit = new Octokit({
       auth: process.env.GITHUB_TOKEN.trim(),
     });
@@ -29,38 +26,73 @@ export async function handlePullRequest(payload) {
 
     console.log(`Reviewing PR #${pull_number}`);
 
+    // Fetch PR files
     const filesResponse = await octokit.pulls.listFiles({
       owner,
       repo,
       pull_number,
     });
 
-    console.log("Files fetched:", filesResponse.data.length);
-
     let combinedDiff = "";
 
     for (const file of filesResponse.data) {
       combinedDiff += `
-FILE: ${file.filename}
-
-PATCH:
-${file.patch || "No patch available"}
+diff --git a/${file.filename} b/${file.filename}
+${file.patch || ""}
 `;
     }
 
-    const review = await reviewCode(combinedDiff);
+    // Parse diff
+    const parsed = parseDiff(combinedDiff);
 
-    console.log("Posting review...");
+const changedLines = [];
+
+for (const file of parsed) {
+  for (const chunk of file.chunks) {
+    for (const change of chunk.changes) {
+      if (change.type === "add") {
+        changedLines.push({
+          path: file.to,
+          line: change.ln,
+          content: change.content,
+        });
+      }
+    }
+  }
+}
+
+console.log("Changed Lines:", changedLines);
+
+    console.log("Parsed files:", parsed.length);
+
+    // Ask AI for findings
+    const findings = await reviewCode(changedLines);
+
+    console.log("AI Findings:", findings);
+
+    if (!findings.length) {
+      console.log("No findings");
+      return;
+    }
+
+    // Convert findings into GitHub review comments
+    const comments = findings.map(finding => ({
+	path: finding.path,
+	line: finding.line,
+	body: `⚠ ${finding.comment}`,
+	}));
+
+    console.log("Posting inline review comments...");
 
     await octokit.pulls.createReview({
       owner,
       repo,
       pull_number,
-      body: review,
       event: "COMMENT",
+      comments,
     });
 
-    console.log("Review posted successfully");
+    console.log("Inline review posted successfully");
   } catch (err) {
     console.error(err);
   }
