@@ -117,10 +117,15 @@ ${file.patch || ""}
 
     // Convert findings into GitHub review comments
     const comments = findings.map(finding => ({
-      path: finding.path,
-      line: finding.line,
-      body: `⚠ ${finding.comment}`,
-    }));
+  path: finding.path,
+  line: finding.line,
+  body: `⚠ ${finding.comment}
+
+\`\`\`suggestion
+${finding.suggestion || ""}
+\`\`\`
+`,
+}));
 
     console.log("Posting inline review comments...");
 
@@ -131,7 +136,6 @@ ${file.patch || ""}
       event: "COMMENT",
       comments,
     });
-
     console.log("Inline review posted successfully");
 
     // Complete check run
@@ -140,7 +144,7 @@ ${file.patch || ""}
       repo,
       check_run_id: checkRun.data.id,
       status: "completed",
-      conclusion: "success",
+     conclusion: "success",
       output: {
         title: "AI Review Completed",
         summary: `Posted ${comments.length} inline review comment(s).`,
