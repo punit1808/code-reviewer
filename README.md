@@ -2,7 +2,7 @@
 
 AI-powered GitHub Pull Request reviewer using Node.js, GitHub Apps, Ollama, and Groq.
 
-Automatically reviews PRs, posts inline review comments, suggests code fixes.
+Automatically reviews PRs, posts inline review comments, suggests executable code fixes.
 
 ---
 
@@ -11,12 +11,13 @@ Automatically reviews PRs, posts inline review comments, suggests code fixes.
 - GitHub App integration
 - PR webhook handling
 - Inline GitHub review comments
-- AI-generated code suggestions
+- AI-generated executable code suggestions
 - GitHub Check Runs support
 - Local LLM support (Ollama)
 - Cloud LLM support (Groq)
 - Diff-aware review pipeline
-- Structured JSON review generation
+- Dockerized deployment
+- GitHub Actions CI/CD pipeline
 
 ---
 
@@ -28,6 +29,8 @@ Automatically reviews PRs, posts inline review comments, suggests code fixes.
 - Ollama
 - Groq API
 - parse-diff
+- Docker
+- GitHub Actions
 
 ---
 
@@ -36,7 +39,7 @@ Automatically reviews PRs, posts inline review comments, suggests code fixes.
 ```text
 GitHub PR
     ↓
-Webhook
+GitHub App Webhook
     ↓
 Node.js Review Server
     ↓
@@ -71,6 +74,8 @@ LLM_PROVIDER=ollama
 OLLAMA_URL=http://localhost:11434
 
 GROQ_API_KEY=your_groq_key
+
+GITHUB_APP_ID=your_app_id
 ```
 
 ---
@@ -99,19 +104,38 @@ npm run dev
 
 # Production Setup
 
-## Use Groq
+## Deployment Stack
 
-```env
-LLM_PROVIDER=groq
-```
+- Backend → Render
+- Container → Docker
+- CI/CD → GitHub Actions
+- LLM → Groq
+- GitHub Integration → GitHub App
 
 ---
 
-## Recommended Deployment
+## GitHub Actions
 
-- Backend → Render
-- LLM → Groq
-- GitHub → GitHub App
+Automatically:
+- builds Docker image
+- pushes image to Docker Hub
+- deploys latest image to Render
+
+---
+
+## Render Environment Variables
+
+```env
+PORT=3000
+
+LLM_PROVIDER=groq
+
+GROQ_API_KEY=your_groq_key
+
+GITHUB_APP_ID=your_app_id
+
+GITHUB_PRIVATE_KEY=your_multiline_pem_key
+```
 
 ---
 
@@ -123,6 +147,7 @@ LLM_PROVIDER=groq
 - Post inline review comments
 - Suggest executable code fixes
 - Create GitHub Check Runs
+- Support local and cloud LLMs
 
 ---
 
