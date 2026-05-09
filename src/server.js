@@ -8,6 +8,10 @@ const app = express();
 
 app.use(express.json());
 
+app.get("/health" , async(req ,res) => {
+	res.sendStatus(200);
+});
+
 app.post("/webhook", async (req, res) => {
   try {
     const event = req.headers["x-github-event"];
