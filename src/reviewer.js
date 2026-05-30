@@ -1,4 +1,3 @@
-````js
 import { askLLM } from "./llm.js";
 
 export async function reviewCode(changedLines) {
@@ -136,4 +135,3 @@ ${JSON.stringify(changedLines, null, 2)}
     return [];
   }
 }
-````
