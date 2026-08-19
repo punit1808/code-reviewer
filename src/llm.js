@@ -26,7 +26,7 @@ export async function askLLM(prompt) {
     });
 
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: process.env.LLM_MODEL,
       messages: [
         {
           role: "user",
