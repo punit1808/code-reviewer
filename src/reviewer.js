@@ -7,6 +7,8 @@ You are an AI code reviewer.
 Review ONLY the provided changed lines.
 
 Return ONLY a valid JSON array.
+Do not use markdown fences.
+Do not include any text before or after the JSON.
 
 IMPORTANT:
 - Use ONLY exact line numbers provided
@@ -29,28 +31,32 @@ Changed Lines:
 ${JSON.stringify(changedLines, null, 2)}
 `;
 
+  const response = await askLLM(prompt);
+
+  if (typeof response !== "string") {
+    throw new Error("LLM returned a non-string response");
+  }
+
+  const cleaned = response
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  console.log("Raw AI response:", JSON.stringify(response));
+  console.log("Cleaned AI response:", JSON.stringify(cleaned));
+
   try {
-    const response = await askLLM(prompt);
+    const findings = JSON.parse(cleaned);
 
-    const cleaned = response
-      .replace(/```json/gi, "")
-      .replace(/```/g, "")
-      .trim();
-
-    try {
-      return JSON.parse(cleaned);
-    } catch {
-      const match = cleaned.match(/\[[\s\S]*\]/);
-
-      if (!match) {
-        return [];
-      }
-
-      return JSON.parse(match[0]);
+    if (!Array.isArray(findings)) {
+      throw new Error("AI response must be a JSON array");
     }
+
+    return findings;
   } catch (err) {
-    console.error("Failed to parse AI response");
-    console.error(err);
-    return [];
+    console.error("Invalid JSON returned by AI");
+    console.error("AI response:", cleaned);
+    throw err;
   }
 }
