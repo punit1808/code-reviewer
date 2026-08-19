@@ -7,8 +7,9 @@ You are an AI code reviewer.
 Review ONLY the provided changed lines.
 
 Return ONLY a valid JSON array.
-Do not use markdown fences.
-Do not include any text before or after the JSON.
+Do not include markdown.
+Do not include <think> tags.
+Do not include explanations before or after the JSON.
 
 IMPORTANT:
 - Use ONLY exact line numbers provided
@@ -31,32 +32,42 @@ Changed Lines:
 ${JSON.stringify(changedLines, null, 2)}
 `;
 
-  const response = await askLLM(prompt);
-
-  if (typeof response !== "string") {
-    throw new Error("LLM returned a non-string response");
-  }
-
-  const cleaned = response
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  console.log("Raw AI response:", JSON.stringify(response));
-  console.log("Cleaned AI response:", JSON.stringify(cleaned));
-
   try {
-    const findings = JSON.parse(cleaned);
+    const response = await askLLM(prompt);
 
-    if (!Array.isArray(findings)) {
-      throw new Error("AI response must be a JSON array");
+    if (typeof response !== "string") {
+      throw new Error("LLM returned a non-string response");
     }
 
-    return findings;
+    console.log("Raw AI response:", JSON.stringify(response));
+
+    const cleaned = response
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    console.log("Cleaned AI response:", JSON.stringify(cleaned));
+
+    try {
+      const parsed = JSON.parse(cleaned);
+
+      if (!Array.isArray(parsed)) {
+        throw new Error("AI response is not a JSON array");
+      }
+
+      return parsed;
+    } catch (parseError) {
+      console.error("Failed to parse AI JSON");
+      console.error("Cleaned AI response:", cleaned);
+      throw parseError;
+    }
   } catch (err) {
-    console.error("Invalid JSON returned by AI");
-    console.error("AI response:", cleaned);
+    console.error("AI code review failed");
+    console.error(err);
+
+    // Do NOT return [] here.
+    // [] means "AI reviewed the code and found no issues".
     throw err;
   }
 }

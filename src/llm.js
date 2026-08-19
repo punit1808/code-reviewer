@@ -34,6 +34,7 @@ export async function askLLM(prompt) {
         },
       ],
       temperature: 0.1,
+      reasoning_format: "hidden",
     });
 
     return response.choices[0].message.content;
