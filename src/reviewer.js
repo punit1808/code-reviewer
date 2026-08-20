@@ -73,6 +73,11 @@ IMPORTANT:
   speculative concerns.
 - Use ONLY the exact file paths and changed line numbers provided.
 - Do not claim a framework, library, or API is invalid unless the hunk proves it.
+- Each array item MUST contain exactly these anchor fields: "path" and "line".
+  Copy "path" exactly from a Diff Hunks path field. Copy "line" as an integer
+  from that hunk's changedLineNumbers list. Never use file, filePath,
+  lineNumber, line_number, a range, or a line number from context.
+- Do not wrap the array in an object or include any other text.
 
 Return ONLY valid JSON array.
 
