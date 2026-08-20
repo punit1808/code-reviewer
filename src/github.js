@@ -108,7 +108,10 @@ function keepEligibleFindings(findings, reviewBatches) {
   }
 
   return findings.filter(finding => {
-    const eligible = eligibleLinesByPath.get(finding?.path)?.has(finding?.line);
+    const eligible = typeof finding?.path === "string"
+      && finding.path.length > 0
+      && Number.isInteger(finding.line)
+      && eligibleLinesByPath.get(finding.path)?.has(finding.line);
     if (!eligible) {
       logInfo("Discarded LLM finding outside changed-line scope", {
         path: finding?.path,
