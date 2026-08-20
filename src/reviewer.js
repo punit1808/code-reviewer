@@ -61,7 +61,8 @@ Review the supplied pull-request diff hunks for high-confidence defects only.
 Unchanged lines are context. You may comment ONLY on the listed changed line
 numbers for the matching file.
 
-Return ONLY valid JSON array.
+Return ONLY a valid JSON object in this exact shape:
+{ "findings": [] }
 
 IMPORTANT:
 - Report only defects that are provably introduced by this change: runtime
@@ -79,17 +80,19 @@ IMPORTANT:
   lineNumber, line_number, a range, or a line number from context.
 - Do not wrap the array in an object or include any other text.
 
-Return ONLY valid JSON array.
+Return ONLY the JSON object. No Markdown, prose, or reasoning.
 
 Format:
-[
-  {
-    "path": "file path",
-    "line": 12,
-    "comment": "Issue explanation",
-    "suggestion": "ONLY valid replacement code"
-  }
-]
+{
+  "findings": [
+    {
+      "path": "file path",
+      "line": 12,
+      "comment": "Issue explanation",
+      "suggestion": "ONLY valid replacement code"
+    }
+  ]
+}
 
 IMPORTANT:
 - "comment" contains explanation

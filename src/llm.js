@@ -20,13 +20,14 @@ export async function askLLM(prompt) {
 
   // GROQ CLOUD
   if (provider === "groq") {
+    const model = process.env.LLM_MODEL;
     const groq = new OpenAI({
       apiKey: process.env.GROQ_API_KEY,
       baseURL: "https://api.groq.com/openai/v1",
     });
 
-    const response = await groq.chat.completions.create({
-      model: process.env.LLM_MODEL,
+    const request = {
+      model,
       messages: [
         {
           role: "user",
@@ -34,7 +35,19 @@ export async function askLLM(prompt) {
         },
       ],
       temperature: 0.1,
-    });
+      // Enforce JSON at the API level so reasoning text cannot consume the
+      // response before the reviewer produces machine-readable findings.
+      response_format: { type: "json_object" },
+      max_completion_tokens: 1_200,
+    };
+
+    // Qwen reasoning models otherwise emit their chain of thought before the
+    // answer, which can exhaust a free-tier completion budget.
+    if (model?.toLowerCase().includes("qwen")) {
+      request.reasoning_effort = "none";
+    }
+
+    const response = await groq.chat.completions.create(request);
 
     return response.choices[0].message.content;
   }
