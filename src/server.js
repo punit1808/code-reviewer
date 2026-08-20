@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import { handlePullRequest } from "./github.js";
+import { logError, logInfo } from "./logger.js";
 
 dotenv.config();
 
@@ -13,10 +14,15 @@ app.get("/health" , async(req ,res) => {
 });
 
 app.post("/webhook", async (req, res) => {
-  try {
-    const event = req.headers["x-github-event"];
+  const event = req.headers["x-github-event"];
+  const deliveryId = req.headers["x-github-delivery"];
 
-    console.log("Received event:", event);
+  try {
+    logInfo("Received GitHub webhook", {
+      deliveryId,
+      event,
+      action: req.body?.action,
+    });
 
     if (event === "pull_request") {
       await handlePullRequest(req.body);
@@ -24,7 +30,11 @@ app.post("/webhook", async (req, res) => {
 
     res.sendStatus(200);
   } catch (err) {
-    console.error(err);
+    logError("Webhook request failed", err, {
+      deliveryId,
+      event,
+      action: req.body?.action,
+    });
     res.sendStatus(500);
   }
 });

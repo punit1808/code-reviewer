@@ -5,41 +5,51 @@ import parseDiff from "parse-diff";
 
 import { reviewCode } from "./reviewer.js";
 import { getInstallationOctokit } from "./githubApp.js";
+import { logError, logInfo } from "./logger.js";
 
 export async function handlePullRequest(payload) {
   let checkRun;
   let owner;
   let repo;
   let octokit;
+  let pullNumber;
+  let installationId;
+  let stage = "validate pull request payload";
 
   try {
-    const installationId = payload.installation.id;
+    installationId = payload?.installation?.id;
+    if (!installationId) {
+      throw new Error("Webhook payload is missing installation.id");
+    }
 
-    console.log("Installation ID:", installationId);
+    stage = "create GitHub installation client";
+    logInfo("Creating GitHub installation client", { installationId });
 
     octokit = await getInstallationOctokit(
       installationId
     );
 
+    stage = "read pull request action";
     const action = payload.action;
 
-    console.log("Webhook action:", action);
+    logInfo("Processing pull request webhook", { installationId, action });
 
     if (action !== "opened" && action !== "synchronize") {
+      logInfo("Skipping unsupported pull request action", { installationId, action });
       return;
     }
 
+    stage = "read repository metadata";
     owner = payload.repository.owner.login;
     repo = payload.repository.name;
 
-    const pull_number = payload.pull_request.number;
+    pullNumber = payload.pull_request.number;
 
-    console.log(`Reviewing PR #${pull_number}`);
+    logInfo("Reviewing pull request", { owner, repo, pullNumber, installationId });
 
     // Create Check Run
+    stage = "create GitHub check run";
     const head_sha = payload.pull_request.head.sha;
-
-    console.log("Creating check run...");
 
     checkRun = await octokit.checks.create({
       owner,
@@ -53,13 +63,19 @@ export async function handlePullRequest(payload) {
       },
     });
 
-    console.log("Check run created");
+    logInfo("GitHub check run created", {
+      owner,
+      repo,
+      pullNumber,
+      checkRunId: checkRun.data.id,
+    });
 
     // Fetch PR files
+    stage = "fetch pull request files";
     const filesResponse = await octokit.pulls.listFiles({
       owner,
       repo,
-      pull_number,
+      pull_number: pullNumber,
     });
 
     let combinedDiff = "";
@@ -72,6 +88,7 @@ ${file.patch || ""}
     }
 
     // Parse diff
+    stage = "parse pull request diff";
     const parsed = parseDiff(combinedDiff);
 
     const changedLines = [];
@@ -90,15 +107,27 @@ ${file.patch || ""}
       }
     }
 
-    console.log("Changed Lines:", changedLines);
+    logInfo("Extracted changed lines", {
+      owner,
+      repo,
+      pullNumber,
+      filesChanged: filesResponse.data.length,
+      changedLineCount: changedLines.length,
+    });
 
     // Ask AI for findings
+    stage = "generate LLM review";
     const findings = await reviewCode(changedLines);
 
-    console.log("AI Findings:", findings);
+    logInfo("LLM review completed", {
+      owner,
+      repo,
+      pullNumber,
+      findingCount: findings.length,
+    });
 
     if (!findings.length) {
-      console.log("No findings");
+      stage = "complete check run without findings";
 
       await octokit.checks.update({
         owner,
@@ -125,20 +154,27 @@ ${file.patch || ""}
 ${finding.suggestion || ""}
 \`\`\`
 `,
-}));
+    }));
 
-    console.log("Posting inline review comments...");
+    stage = "post inline review comments";
+    logInfo("Posting inline review comments", {
+      owner,
+      repo,
+      pullNumber,
+      commentCount: comments.length,
+    });
 
     await octokit.pulls.createReview({
       owner,
       repo,
-      pull_number,
+      pull_number: pullNumber,
       event: "COMMENT",
       comments,
     });
-    console.log("Inline review posted successfully");
+    logInfo("Inline review comments posted", { owner, repo, pullNumber });
 
     // Complete check run
+    stage = "complete check run with findings";
     await octokit.checks.update({
       owner,
       repo,
@@ -151,13 +187,27 @@ ${finding.suggestion || ""}
       },
     });
 
-    console.log("Check run completed");
+    logInfo("Pull request review completed", {
+      owner,
+      repo,
+      pullNumber,
+      checkRunId: checkRun.data.id,
+      commentCount: comments.length,
+    });
 
   } catch (err) {
-    console.error(err);
+    logError("Pull request review failed", err, {
+      stage,
+      installationId,
+      owner,
+      repo,
+      pullNumber,
+      checkRunId: checkRun?.data?.id,
+    });
 
     try {
       if (checkRun?.data?.id && octokit) {
+        const failedStage = stage;
         await octokit.checks.update({
           owner,
           repo,
@@ -166,12 +216,18 @@ ${finding.suggestion || ""}
           conclusion: "failure",
           output: {
             title: "AI Review Failed",
-            summary: err.message,
+            summary: `The review failed during: ${failedStage}. Check the service logs for details.`,
           },
         });
       }
     } catch (updateErr) {
-      console.error("Failed to update check run");
+      logError("Failed to mark GitHub check run as failed", updateErr, {
+        originalStage: stage,
+        owner,
+        repo,
+        pullNumber,
+        checkRunId: checkRun?.data?.id,
+      });
     }
   }
 }

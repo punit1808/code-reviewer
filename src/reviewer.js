@@ -1,4 +1,57 @@
 import { askLLM } from "./llm.js";
+import { logError } from "./logger.js";
+
+export function extractJsonArray(response) {
+  const cleaned = String(response ?? "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/```(?:json)?/gi, "")
+    .trim();
+
+  // Some models add a short sentence before or after the JSON. Find each JSON
+  // array candidate and return the last valid one, which is normally the final
+  // answer after any model reasoning.
+  for (let start = cleaned.lastIndexOf("["); start >= 0; start = cleaned.lastIndexOf("[", start - 1)) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let end = start; end < cleaned.length; end += 1) {
+      const character = cleaned[end];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (character === "\\") {
+          escaped = true;
+        } else if (character === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (character === '"') {
+        inString = true;
+      } else if (character === "[") {
+        depth += 1;
+      } else if (character === "]") {
+        depth -= 1;
+        if (depth === 0) {
+          try {
+            const findings = JSON.parse(cleaned.slice(start, end + 1));
+            if (Array.isArray(findings)) {
+              return findings;
+            }
+          } catch {
+            // Keep looking for another array candidate.
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  throw new Error("LLM response did not contain a valid JSON array");
+}
 
 export async function reviewCode(changedLines) {
   const prompt = `
@@ -58,15 +111,12 @@ ${JSON.stringify(changedLines, null, 2)}
   const response = await askLLM(prompt);
 
   try {
-    const cleaned = response
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-
-    return JSON.parse(cleaned);
+    return extractJsonArray(response);
   } catch (err) {
-    console.error("Failed to parse AI response");
-    console.log(response);
+    logError("Failed to parse LLM review response", err, {
+      responsePreview: String(response ?? "").slice(0, 1_000),
+      responseLength: String(response ?? "").length,
+    });
     return [];
   }
 }
