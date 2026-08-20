@@ -99,7 +99,7 @@ export function buildReviewBatches(parsedDiff) {
   return batches;
 }
 
-function keepEligibleFindings(findings, reviewBatches) {
+export function keepEligibleFindings(findings, reviewBatches) {
   const eligibleLinesByPath = new Map();
   for (const hunk of reviewBatches.flat()) {
     const lines = eligibleLinesByPath.get(hunk.path) ?? new Set();
@@ -107,8 +107,17 @@ function keepEligibleFindings(findings, reviewBatches) {
     eligibleLinesByPath.set(hunk.path, lines);
   }
 
-  return findings.filter(finding => {
-    const eligible = typeof finding?.path === "string"
+  return findings.map(finding => {
+    const rawLine = finding?.line ?? finding?.lineNumber ?? finding?.line_number;
+    return {
+      ...finding,
+      path: finding?.path ?? finding?.file ?? finding?.filePath,
+      line: typeof rawLine === "string" && /^\d+$/.test(rawLine)
+        ? Number(rawLine)
+        : rawLine,
+    };
+  }).filter(finding => {
+    const eligible = typeof finding.path === "string"
       && finding.path.length > 0
       && Number.isInteger(finding.line)
       && eligibleLinesByPath.get(finding.path)?.has(finding.line);
@@ -116,6 +125,7 @@ function keepEligibleFindings(findings, reviewBatches) {
       logInfo("Discarded LLM finding outside changed-line scope", {
         path: finding?.path,
         line: finding?.line,
+        fields: Object.keys(finding ?? {}),
       });
     }
     return eligible;
