@@ -53,19 +53,26 @@ export function extractJsonArray(response) {
   throw new Error("LLM response did not contain a valid JSON array");
 }
 
-export async function reviewCode(changedLines) {
+export async function reviewCode(reviewHunks) {
   const prompt = `
 You are an AI code reviewer.
 
-Review ONLY the provided changed lines.
+Review the supplied pull-request diff hunks for high-confidence defects only.
+Unchanged lines are context. You may comment ONLY on the listed changed line
+numbers for the matching file.
 
 Return ONLY valid JSON array.
 
 IMPORTANT:
-- Use ONLY exact line numbers provided
-- Use ONLY exact file paths provided
-- Focus on bugs and logical issues
-- Ignore formatting issues
+- Report only defects that are provably introduced by this change: runtime
+  failures, incorrect API usage, security issues, data loss, broken error
+  handling, or clear behavioural regressions.
+- Return [] when context is insufficient to prove a defect.
+- Return at most 3 findings, prioritizing the highest-impact defects.
+- Ignore formatting, naming, version conventions, redundant code, and
+  speculative concerns.
+- Use ONLY the exact file paths and changed line numbers provided.
+- Do not claim a framework, library, or API is invalid unless the hunk proves it.
 
 Return ONLY valid JSON array.
 
@@ -81,7 +88,8 @@ Format:
 
 IMPORTANT:
 - "comment" contains explanation
-- "suggestion" contains ONLY compilable replacement code
+- "suggestion" contains ONLY compilable replacement code, or an empty string
+  when a safe replacement cannot be proven from the supplied context
 - NO markdown in suggestion
 - NO explanations in suggestion
 - NO natural language in suggestion
@@ -104,8 +112,8 @@ CRITICAL RULES FOR SUGGESTIONS:
 - Suggested code must compile as-is
 - Suggested code must preserve existing behavior unless fixing a real bug
 
-Changed Lines:
-${JSON.stringify(changedLines, null, 2)}
+Diff Hunks:
+${JSON.stringify(reviewHunks, null, 2)}
 `;
 
   const response = await askLLM(prompt);
